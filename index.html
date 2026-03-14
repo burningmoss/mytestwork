@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TETRIS PRO - 极简主义重制版</title>
+    <style>
+        :root {
+            --bg-color: #0b0e18;
+            --panel-bg: rgba(20, 26, 45, 0.95);
+            --accent-blue: #3ec1d3;
+            --text-color: #ffffff;
+        }
+        * { box-sizing: border-box; user-select: none; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            background: radial-gradient(circle at center, #1a1f2f 0%, #0b0e18 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Inter', system-ui, sans-serif;
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        .game-wrapper {
+            display: flex;
+            gap: 2rem;
+            padding: 2rem;
+            background: var(--panel-bg);
+            border-radius: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+        }
+
+        .board-container { position: relative; }
+        
+        canvas#board {
+            background: #05070a;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            display: block;
+        }
+
+        .side-panel {
+            width: 180px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.3);
+            padding: 1.2rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        .stat-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: var(--accent-blue); margin-top: 0.5rem; }
+
+        .controls-hint {
+            font-size: 0.75rem;
+            color: #555;
+            line-height: 1.6;
+            margin-top: auto;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(11, 14, 24, 0.9);
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            display: none;
+            border: 1px solid var(--accent-blue);
+        }
+
+        button {
+            background: var(--accent-blue);
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 0.5rem;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <div class="board-container">
+        <canvas id="board" width="300" height="600"></canvas>
+        <div id="game-over">
+            <h2>游戏结束</h2>
+            <button onclick="resetGame()">重新开始</button>
+        </div>
+    </div>
+
+    <div class="side-panel">
+        <div class="stat-box">
+            <div class="stat-label">分数</div>
+            <div id="score" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">等级</div>
+            <div id="level" class="stat-value">1</div>
+        </div>
+        
+        <div class="controls-hint">
+            操作说明：<br>
+            ← → 移动<br>
+            ↑ 旋转<br>
+            ↓ 加速下落<br>
+            空格 直接触底
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const levelElement = document.getElementById('level');
+
+    const ROW = 20, COL = 10, SIZE = 30;
+    let score = 0, level = 1, board = [], gameInterval;
+
+    // 方块定义
+    const SHAPES = [
+        [[1,1,1,1]], // I
+        [[1,1],[1,1]], // O
+        [[0,1,0],[1,1,1]], // T
+        [[1,0,0],[1,1,1]], // L
+        [[0,0,1],[1,1,1]], // J
+        [[0,1,1],[1,1,0]], // S
+        [[1,1,0],[0,1,1]]  // Z
+    ];
+    const COLORS = ['#3ec1d3', '#f39c12', '#9b59b6', '#e74c3c', '#2ecc71', '#3498db', '#f1c40f'];
+
+    let piece = { pos: {x: 0, y: 0}, matrix: null, color: '' };
+
+    function initBoard() {
+        board = Array.from({length: ROW}, () => Array(COL).fill(0));
+    }
+
+    function createPiece() {
+        const idx = Math.floor(Math.random() * SHAPES.length);
+        piece.matrix = SHAPES[idx];
+        piece.color = COLORS[idx];
+        piece.pos = {x: Math.floor(COL/2 - piece.matrix[0].length/2), y: 0};
+        
+        if (collide()) {
+            document.getElementById('game-over').style.display = 'block';
+            clearInterval(gameInterval);
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle = '#05070a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 画格子（暗线）
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        for(let i=0; i<COL; i++) ctx.strokeRect(i*SIZE, 0, 1, canvas.height);
+        for(let i=0; i<ROW; i++) ctx.strokeRect(0, i*SIZE, canvas.width, 1);
+
+        drawMatrix(board, {x: 0, y: 0});
+        drawMatrix(piece.matrix, piece.pos, piece.color);
+    }
+
+    function drawMatrix(matrix, offset, color) {
+        matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    ctx.fillStyle = color || value;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = color || value;
+                    ctx.fillRect((x + offset.x) * SIZE, (y + offset.y) * SIZE, SIZE-2, SIZE-2);
+                    ctx.shadowBlur = 0;
+                }
+            });
+        });
+    }
+
+    function collide() {
+        for (let y = 0; y < piece.matrix.length; y++) {
+            for (let x = 0; x < piece.matrix[y].length; x++) {
+                if (piece.matrix[y][x] !== 0 && (board[y + piece.pos.y] && board[y + piece.pos.y][x + piece.pos.x]) !== 0) return true;
+            }
+        }
+        return false;
+    }
+
+    function merge() {
+        piece.matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) board[y + piece.pos.y][x + piece.pos.x] = piece.color;
+            });
+        });
+    }
+
+    function rotate(matrix) {
+        const n = matrix.length;
+        const res = matrix[0].map((_, i) => matrix.map(row => row[i]).reverse());
+        return res;
+    }
+
+    function clearLines() {
+        let linesCleared = 0;
+        outer: for (let y = ROW - 1; y >= 0; y--) {
+            for (let x = 0; x < COL; x++) {
+                if (board[y][x] === 0) continue outer;
+            }
+            const row = board.splice(y, 1)[0].fill(0);
+            board.unshift(row);
+            linesCleared++;
+            y++;
+        }
+        if (linesCleared > 0) {
+            score += linesCleared * 100;
+            scoreElement.innerText = score;
+            level = Math.floor(score / 500) + 1;
+            levelElement.innerText = level;
+        }
+    }
+
+    function drop() {
+        piece.pos.y++;
+        if (collide()) {
+            piece.pos.y--;
+            merge();
+            clearLines();
+            createPiece();
+        }
+        draw();
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.keyCode === 37) { // Left
+            piece.pos.x--;
+            if (collide()) piece.pos.x++;
+        } else if (e.keyCode === 39) { // Right
+            piece.pos.x++;
+            if (collide()) piece.pos.x--;
+        } else if (e.keyCode === 40) { // Down
+            drop();
+        } else if (e.keyCode === 38) { // Up (Rotate)
+            const oldMatrix = piece.matrix;
+            piece.matrix = rotate(piece.matrix);
+            if (collide()) piece.matrix = oldMatrix;
+        } else if (e.keyCode === 32) { // Space (Hard Drop)
+            while(!collide()) piece.pos.y++;
+            piece.pos.y--;
+            merge();
+            clearLines();
+            createPiece();
+        }
+        draw();
+    });
+
+    function resetGame() {
+        initBoard();
+        score = 0;
+        level = 1;
+        scoreElement.innerText = '0';
+        levelElement.innerText = '1';
+        document.getElementById('game-over').style.display = 'none';
+        createPiece();
+        if(gameInterval) clearInterval(gameInterval);
+        gameInterval = setInterval(drop, 1000);
+    }
+
+    resetGame();
+</script>
+
+</body>
+</html>
