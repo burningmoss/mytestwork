@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>◤ TETRIS ◢ – classic arcade</title>
+    <title>◤ TETRIS ◢ – 多彩主题</title>
     <style>
         * {
             box-sizing: border-box;
@@ -31,7 +31,7 @@
 
         .main-panel {
             display: flex;
-            gap: 1rem;
+            gap: 1.2rem;
             align-items: flex-start;
             flex-wrap: wrap;
             justify-content: center;
@@ -53,7 +53,7 @@
             padding: 1rem 1rem 1.5rem;
             box-shadow: inset 0 1px 2px #4e6190, 0 15px 25px rgba(0, 0, 0, 0.6);
             border: 1px solid #32456b;
-            min-width: 160px;
+            min-width: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -125,6 +125,51 @@
             box-shadow: inset 0 0 0 1px #3f5182, 0 5px 10px black;
             image-rendering: crisp-edges;
             margin-bottom: 0.2rem;
+        }
+
+        /* 新主题选择器 */
+        .theme-selector {
+            background: #1a2338;
+            border-radius: 1.2rem;
+            padding: 0.8rem 0.8rem 1rem;
+            width: 100%;
+            border: 1px solid #4f6390;
+            box-shadow: inset 0 2px 5px #00000055;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .theme-label {
+            color: #b0c8ff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .theme-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .theme-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: 0.1s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .theme-btn.active {
+            border-color: #ffffff;
+            transform: scale(1.15);
+            box-shadow: 0 0 10px #fff;
         }
 
         .btn-new, .btn-pause {
@@ -213,6 +258,14 @@
                 <div class="status-text" id="gameStatus"></div>
             </div>
 
+            <!-- 颜色主题选择器 -->
+            <div class="theme-selector">
+                <div class="theme-label">🎨 COLOR THEME</div>
+                <div class="theme-buttons" id="themeButtons">
+                    <!-- 动态生成7个主题色块 -->
+                </div>
+            </div>
+
             <div class="button-group">
                 <button class="btn-new" id="newGameBtn">↻ NEW GAME</button>
                 <button class="btn-pause" id="pauseBtn">PAUSE</button>
@@ -229,40 +282,60 @@
 
 <script>
     (function() {
-        // ---------- CONSTANTS ----------
+        // ---------- 常量定义 ----------
         const COLS = 10;
         const ROWS = 20;
         const BLOCK_SIZE = 30;
         const PREVIEW_SIZE = 20;
 
-        const TETROMINOS = [
-            { matrix: [[1,1,1,1]], color: '#3ec1d3' },
-            { matrix: [[1,1],[1,1]], color: '#f6d365' },
-            { matrix: [[0,1,0],[1,1,1]], color: '#b286fe' },
-            { matrix: [[0,1,1],[1,1,0]], color: '#5cd6a2' },
-            { matrix: [[1,1,0],[0,1,1]], color: '#fc7e6b' },
-            { matrix: [[1,0,0],[1,1,1]], color: '#5d9df9' },
-            { matrix: [[0,0,1],[1,1,1]], color: '#ffb347' }
+        // 七种基本形状（不再内嵌颜色，只存矩阵和id）
+        const SHAPES = [
+            { id: 0, matrix: [[1,1,1,1]] },        // I
+            { id: 1, matrix: [[1,1],[1,1]] },      // O
+            { id: 2, matrix: [[0,1,0],[1,1,1]] },  // T
+            { id: 3, matrix: [[0,1,1],[1,1,0]] },  // S
+            { id: 4, matrix: [[1,1,0],[0,1,1]] },  // Z
+            { id: 5, matrix: [[1,0,0],[1,1,1]] },  // J
+            { id: 6, matrix: [[0,0,1],[1,1,1]] }   // L
         ];
 
-        // ---------- GLOBAL STATE ----------
-        let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-        let activePiece = { matrix: [], color: '', x: 3, y: 0 };
-        let nextPiece = null;
+        // 预定义7套颜色主题 (每个主题7个颜色，对应id 0~6)
+        const THEMES = [
+            { name: '经典', colors: ['#3ec1d3', '#f6d365', '#b286fe', '#5cd6a2', '#fc7e6b', '#5d9df9', '#ffb347'] },
+            { name: '霓虹', colors: ['#00ffff', '#ffff00', '#ff00ff', '#00ff00', '#ff6600', '#3366ff', '#ff99cc'] },
+            { name: '暖阳', colors: ['#ffb347', '#ff6b6b', '#ff8c42', '#f4a261', '#e76f51', '#d9b48f', '#c44536'] },
+            { name: '冷翠', colors: ['#3ec1d3', '#2d5d7a', '#4a90e2', '#50c878', '#1e4d6b', '#7fcdcd', '#2e8b57'] },
+            { name: '柔和', colors: ['#a8e6cf', '#d4a5a5', '#ffd3b6', '#f7c5cc', '#b7d7e8', '#e2d1c3', '#c7b198'] },
+            { name: '暗黑', colors: ['#b0bec5', '#78909c', '#546e7a', '#37474f', '#263238', '#102027', '#4a6572'] },
+            { name: '糖果', colors: ['#ff9aa2', '#ffb7b2', '#ffdac1', '#e2f0cb', '#b5e5d4', '#b2d8ff', '#c7b9ff'] }
+        ];
+
+        // ---------- 全局状态 ----------
+        let grid = Array(ROWS).fill().map(() => Array(COLS).fill(-1)); // -1表示空格
+        let activePiece = {
+            id: 0,
+            matrix: [],
+            x: 3,
+            y: 0
+        };
+        let nextPiece = { id: 0, matrix: [] };
         let score = 0;
         let highScore = 0;
         let gameOver = false;
         let paused = false;
 
-        // Visual effects
+        // 当前主题索引
+        let currentTheme = 0; // 默认经典
+
+        // 视觉效果
         let flashAlpha = 0.0;
         const FLASH_DECAY = 0.1;
-        let particles = [];                // 爆炸粒子数组
+        let particles = [];
 
-        // Audio
+        // 音频
         let audioCtx = null;
 
-        // Timings
+        // 计时
         const NORMAL_DROP_INTERVAL = 500;
         const SOFT_DROP_COOLDOWN = 70;
         const MOVE_COOLDOWN = 130;
@@ -276,7 +349,7 @@
 
         const keys = { left: false, right: false, down: false, up: false, space: false };
 
-        // DOM elements
+        // DOM
         const boardCanvas = document.getElementById('board');
         const boardCtx = boardCanvas.getContext('2d');
         const nextCanvas = document.getElementById('nextCanvas');
@@ -285,8 +358,44 @@
         const highScoreSpan = document.getElementById('highScoreDisplay');
         const gameStatus = document.getElementById('gameStatus');
         const pauseBtn = document.getElementById('pauseBtn');
+        const themeButtonsDiv = document.getElementById('themeButtons');
 
-        // ---------- AUDIO : EXPLOSION ----------
+        // ---------- 初始化主题按钮 ----------
+        function initThemeButtons() {
+            THEMES.forEach((theme, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'theme-btn' + (index === currentTheme ? ' active' : '');
+                // 用主题第一个颜色作为按钮代表色，或做成渐变？简单用第一个颜色
+                btn.style.backgroundColor = theme.colors[0];
+                btn.title = theme.name;
+                btn.addEventListener('click', () => {
+                    setTheme(index);
+                });
+                themeButtonsDiv.appendChild(btn);
+            });
+        }
+
+        // 切换主题
+        function setTheme(index) {
+            if (index === currentTheme) return;
+            currentTheme = index;
+            // 更新按钮激活状态
+            document.querySelectorAll('.theme-btn').forEach((btn, i) => {
+                if (i === currentTheme) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            // 重新绘制（颜色会通过getColor函数自动更新）
+            drawBoard();
+            drawNext();
+        }
+
+        // 根据形状id和当前主题获取颜色
+        function getColor(shapeId) {
+            if (shapeId === -1) return null; // 空格
+            return THEMES[currentTheme].colors[shapeId];
+        }
+
+        // ---------- 音频爆炸 ----------
         function initAudio() {
             if (audioCtx) return;
             try {
@@ -297,7 +406,6 @@
         function playExplosionSound() {
             if (!audioCtx) initAudio();
             if (!audioCtx) return;
-
             const resumeAndPlay = () => {
                 if (audioCtx.state === 'suspended') {
                     audioCtx.resume().then(() => actuallyPlayExplosion());
@@ -339,20 +447,19 @@
             whiteNoise.stop(now + 0.4);
         }
 
-        // ---------- PARTICLES (visual explosion) ----------
+        // ---------- 粒子效果 ----------
         function createExplosionParticles(rows) {
             const colors = ['#ffaa00', '#ff6600', '#ff4400', '#ffffaa', '#ffffff', '#ff3366'];
             rows.forEach(row => {
-                for (let i = 0; i < 10; i++) { // 每行10个粒子
+                for (let i = 0; i < 10; i++) {
                     const baseX = (Math.random() * COLS) * BLOCK_SIZE;
                     const baseY = row * BLOCK_SIZE + Math.random() * BLOCK_SIZE;
                     particles.push({
                         x: baseX,
                         y: baseY,
                         vx: (Math.random() - 0.5) * 5,
-                        vy: (Math.random() - 1.2) * 3, // 向上扩散
+                        vy: (Math.random() - 1.2) * 3,
                         life: 0.8 + Math.random() * 0.4,
-                        maxLife: 1.0,
                         color: colors[Math.floor(Math.random() * colors.length)]
                     });
                 }
@@ -364,7 +471,7 @@
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.vy += 0.08; // 轻微重力
+                p.vy += 0.08;
                 p.life -= 0.01;
                 if (p.life <= 0 || p.y > ROWS * BLOCK_SIZE || p.x < -BLOCK_SIZE || p.x > COLS * BLOCK_SIZE + BLOCK_SIZE) {
                     particles.splice(i, 1);
@@ -374,20 +481,19 @@
 
         function drawParticles() {
             particles.forEach(p => {
-                const alpha = Math.min(p.life, 1);
-                boardCtx.globalAlpha = alpha;
+                boardCtx.globalAlpha = p.life;
                 boardCtx.fillStyle = p.color;
                 boardCtx.shadowColor = '#fff';
                 boardCtx.shadowBlur = 8;
                 boardCtx.beginPath();
                 boardCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
                 boardCtx.fill();
-                boardCtx.shadowBlur = 0;
             });
             boardCtx.globalAlpha = 1;
+            boardCtx.shadowBlur = 0;
         }
 
-        // ---------- GAME LOGIC (unchanged except mergeAndReplace) ----------
+        // ---------- 游戏逻辑 ----------
         function loadHighScore() {
             try {
                 const saved = localStorage.getItem('tetrisHighScore');
@@ -413,20 +519,23 @@
         }
 
         function randomTetromino() {
-            const idx = Math.floor(Math.random() * TETROMINOS.length);
-            return { 
-                matrix: TETROMINOS[idx].matrix.map(row => [...row]),
-                color: TETROMINOS[idx].color 
+            const idx = Math.floor(Math.random() * SHAPES.length);
+            return {
+                id: SHAPES[idx].id,
+                matrix: SHAPES[idx].matrix.map(row => [...row])
             };
         }
 
         function spawnNewPiece() {
-            if (!nextPiece) nextPiece = randomTetromino();
+            if (!nextPiece || !nextPiece.matrix) {
+                nextPiece = randomTetromino();
+            }
+            activePiece.id = nextPiece.id;
             activePiece.matrix = nextPiece.matrix.map(row => [...row]);
-            activePiece.color = nextPiece.color;
             const width = activePiece.matrix[0].length;
             activePiece.x = Math.floor((COLS - width) / 2);
             activePiece.y = 0;
+
             nextPiece = randomTetromino();
 
             if (collision(activePiece.matrix, activePiece.x, activePiece.y)) {
@@ -445,7 +554,7 @@
                         const boardX = offX + c;
                         const boardY = offY + r;
                         if (boardX < 0 || boardX >= COLS || boardY >= ROWS || boardY < 0) return true;
-                        if (boardY >= 0 && grid[boardY][boardX] !== 0) return true;
+                        if (boardY >= 0 && grid[boardY][boardX] !== -1) return true;
                     }
                 }
             }
@@ -453,29 +562,36 @@
         }
 
         function mergeAndReplace() {
-            // 先将当前活动方块固定到网格
+            // 将当前活动方块固定到网格（存id）
             for (let r = 0; r < activePiece.matrix.length; r++) {
                 for (let c = 0; c < activePiece.matrix[0].length; c++) {
                     if (activePiece.matrix[r][c] !== 0) {
                         const boardY = activePiece.y + r;
                         const boardX = activePiece.x + c;
                         if (boardY >= 0 && boardY < ROWS && boardX >= 0 && boardX < COLS) {
-                            grid[boardY][boardX] = activePiece.color;
+                            grid[boardY][boardX] = activePiece.id;
                         }
                     }
                 }
             }
 
-            // 消除满行并记录被消除的行号
+            // 消除满行
             let rowsCleared = 0;
             let clearedRowIndices = [];
             for (let row = ROWS - 1; row >= 0; ) {
-                if (grid[row].every(cell => cell !== 0)) {
-                    clearedRowIndices.push(row);        // 记录原始行号
-                    grid.splice(row, 1);
-                    grid.unshift(new Array(COLS).fill(0));
+                let full = true;
+                for (let col = 0; col < COLS; col++) {
+                    if (grid[row][col] === -1) { full = false; break; }
+                }
+                if (full) {
+                    clearedRowIndices.push(row);
+                    // 将这一行上面的所有行下移
+                    for (let r = row; r > 0; r--) {
+                        grid[r] = [...grid[r-1]];
+                    }
+                    grid[0] = Array(COLS).fill(-1);
                     rowsCleared++;
-                    // 继续检查同一索引（原来的上一行）
+                    // 继续检查同一行（因为上移了一行）
                 } else {
                     row--;
                 }
@@ -489,13 +605,12 @@
                 animateScore();
                 saveHighScore();
 
-                // 视觉爆炸效果
                 flashAlpha = 0.7;
-                playExplosionSound();                   // 爆炸音效
-                createExplosionParticles(clearedRowIndices); // 生成粒子
+                playExplosionSound();
+                createExplosionParticles(clearedRowIndices);
             }
 
-            spawnNewPiece(); // 生成下一个方块
+            spawnNewPiece();
         }
 
         function movePiece(dx, dy) {
@@ -583,7 +698,7 @@
         function resetGame() {
             for (let row = 0; row < ROWS; row++) {
                 for (let col = 0; col < COLS; col++) {
-                    grid[row][col] = 0;
+                    grid[row][col] = -1;
                 }
             }
             score = 0;
@@ -595,7 +710,7 @@
             }
             gameStatus.innerText = '';
             resetKeys();
-            particles = [];            // 清空粒子
+            particles = [];
             nextPiece = randomTetromino();
             spawnNewPiece();
 
@@ -608,11 +723,11 @@
             flashAlpha = 0.0;
         }
 
-        // ---------- RENDERING ----------
+        // ---------- 渲染 ----------
         function drawBoard() {
             boardCtx.clearRect(0, 0, 300, 600);
 
-            // grid lines
+            // 网格线
             boardCtx.strokeStyle = '#2f3c62';
             boardCtx.lineWidth = 0.4;
             for (let i = 0; i <= COLS; i++) {
@@ -628,11 +743,12 @@
                 boardCtx.stroke();
             }
 
-            // blocks
+            // 已固定的方块
             for (let row = 0; row < ROWS; row++) {
                 for (let col = 0; col < COLS; col++) {
-                    const color = grid[row][col];
-                    if (color !== 0) {
+                    const shapeId = grid[row][col];
+                    if (shapeId !== -1) {
+                        const color = getColor(shapeId);
                         boardCtx.fillStyle = color;
                         boardCtx.shadowColor = 'rgba(255,255,255,0.3)';
                         boardCtx.shadowBlur = 8;
@@ -644,14 +760,14 @@
                 }
             }
 
-            // active piece
+            // 活动方块
             if (activePiece && !gameOver) {
                 for (let r = 0; r < activePiece.matrix.length; r++) {
                     for (let c = 0; c < activePiece.matrix[0].length; c++) {
                         if (activePiece.matrix[r][c] !== 0) {
                             const x = (activePiece.x + c) * BLOCK_SIZE;
                             const y = (activePiece.y + r) * BLOCK_SIZE;
-                            boardCtx.fillStyle = activePiece.color;
+                            boardCtx.fillStyle = getColor(activePiece.id);
                             boardCtx.shadowColor = '#fff3';
                             boardCtx.shadowBlur = 10;
                             boardCtx.fillRect(x, y, BLOCK_SIZE-1, BLOCK_SIZE-1);
@@ -663,17 +779,17 @@
                 }
             }
 
-            // flash overlay (white flash)
+            // 闪光
             if (flashAlpha > 0) {
                 boardCtx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
                 boardCtx.fillRect(0, 0, 300, 600);
                 flashAlpha = Math.max(0, flashAlpha - FLASH_DECAY);
             }
 
-            // particles (drawn above flash)
+            // 粒子
             drawParticles();
 
-            // game over overlay
+            // 游戏结束遮罩
             if (gameOver) {
                 boardCtx.globalAlpha = 0.5;
                 boardCtx.fillStyle = '#0b0e18';
@@ -687,7 +803,7 @@
                 boardCtx.shadowBlur = 0;
             }
 
-            // status text update
+            // 状态文本
             if (gameOver) {
                 gameStatus.innerText = 'GAME OVER';
             } else if (paused) {
@@ -701,9 +817,9 @@
             nextCtx.clearRect(0, 0, 120, 120);
             nextCtx.fillStyle = '#0b0f1c';
             nextCtx.fillRect(0, 0, 120, 120);
-            if (nextPiece) {
+            if (nextPiece && nextPiece.matrix) {
                 const matrix = nextPiece.matrix;
-                const color = nextPiece.color;
+                const color = getColor(nextPiece.id);
                 const cols = matrix[0].length;
                 const rows = matrix.length;
                 const offsetX = (5 - cols) * PREVIEW_SIZE / 2;
@@ -724,11 +840,10 @@
             }
         }
 
-        // ---------- GAME LOOP ----------
+        // ---------- 游戏循环 ----------
         function gameLoop(now) {
             requestAnimationFrame(gameLoop);
 
-            // 更新粒子（不受暂停影响，让爆炸动画继续）
             updateParticles();
 
             if (!gameOver && !paused) {
@@ -754,7 +869,7 @@
             drawNext();
         }
 
-        // ---------- EVENT HANDLERS ----------
+        // ---------- 事件 ----------
         function handleKeyDown(e) {
             const key = e.key;
             if (key === ' ' || key.startsWith('Arrow')) e.preventDefault();
@@ -814,6 +929,9 @@
         window.addEventListener('keydown', () => {
             initAudio();
         }, { once: true });
+
+        // 初始化主题按钮
+        initThemeButtons();
 
         loadHighScore();
         resetGame();
